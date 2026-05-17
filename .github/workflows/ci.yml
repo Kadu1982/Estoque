@@ -65,6 +65,7 @@ jobs:
           bash -n infra/scripts/restore-db.sh
           bash -n infra/scripts/go-no-go.sh
           bash -n infra/scripts/staging-rehearsal.sh
+          bash -n infra/scripts/publish-github.sh
 
       - name: Validate docker compose files
         run: |
