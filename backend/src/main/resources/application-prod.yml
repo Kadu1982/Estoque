@@ -1,0 +1,11 @@
+spring:
+  jpa:
+    open-in-view: false
+  h2:
+    console:
+      enabled: false
+
+logging:
+  level:
+    com.austral.estoque: INFO
+    org.springframework.security: WARN
