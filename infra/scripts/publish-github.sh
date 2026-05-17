@@ -33,11 +33,6 @@ if ! command -v curl >/dev/null 2>&1; then
   exit 1
 fi
 
-if ! command -v jq >/dev/null 2>&1; then
-  echo "jq command not found"
-  exit 1
-fi
-
 if [[ ! -d .git ]]; then
   echo "Current directory is not a git repository"
   exit 1
