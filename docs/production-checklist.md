@@ -8,6 +8,7 @@
 - Confirm `JWT_SECRET` has at least 64 random characters.
 - Confirm admin seed password is not default.
 - Place TLS files in `infra/ssl/cert.pem` and `infra/ssl/key.pem`.
+- Confirm TLS files are not empty (deploy now fails fast if missing/empty).
 - Confirm DNS points to the VPS IP.
 - Run local readiness check:
 ```bash

@@ -8,12 +8,16 @@ set -euo pipefail
 #   ENV_FILE=.env.production
 #   WAIT_SECONDS=120
 #   SKIP_SMOKE=true
+#   SSL_CERT_PATH=infra/ssl/cert.pem
+#   SSL_KEY_PATH=infra/ssl/key.pem
 
 APP_DIR="${APP_DIR:-/opt/austral-estoque}"
 ENV_FILE="${ENV_FILE:-.env.production}"
 WAIT_SECONDS="${WAIT_SECONDS:-120}"
 DOMAIN="${DOMAIN:-}"
 SKIP_SMOKE="${SKIP_SMOKE:-false}"
+SSL_CERT_PATH="${SSL_CERT_PATH:-infra/ssl/cert.pem}"
+SSL_KEY_PATH="${SSL_KEY_PATH:-infra/ssl/key.pem}"
 
 if [[ -z "$DOMAIN" ]]; then
   echo "DOMAIN is required. Example: DOMAIN=estoque.example.com ./infra/scripts/deploy.sh"
@@ -24,6 +28,16 @@ cd "$APP_DIR"
 
 if [[ ! -f "$ENV_FILE" ]]; then
   echo "Missing env file: $APP_DIR/$ENV_FILE"
+  exit 1
+fi
+
+if [[ ! -s "$SSL_CERT_PATH" ]]; then
+  echo "Missing TLS certificate file: $APP_DIR/$SSL_CERT_PATH"
+  exit 1
+fi
+
+if [[ ! -s "$SSL_KEY_PATH" ]]; then
+  echo "Missing TLS key file: $APP_DIR/$SSL_KEY_PATH"
   exit 1
 fi
 
@@ -67,6 +81,9 @@ if ! command -v curl >/dev/null 2>&1; then
   echo "curl command not found"
   exit 1
 fi
+
+echo "Validating docker compose configuration"
+docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file "$ENV_FILE" config >/dev/null
 
 PREV_REV="$(git rev-parse HEAD)"
 echo "Previous revision: $PREV_REV"
