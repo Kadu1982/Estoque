@@ -409,6 +409,43 @@ class OperationalFlowIntegrationTest {
             .andExpect(jsonPath("$.unitId").value(unitId));
     }
 
+    @Test
+    void shouldCreateAndFetchWaterWell() throws Exception {
+        String token = loginAndGetToken();
+        String suffix = String.valueOf(System.currentTimeMillis()) + "WTR";
+        String unitId = operationalUnitRepository.findFirstByDeletedAtIsNullAndActiveTrueOrderByCreatedAtAsc()
+            .orElseThrow()
+            .getId()
+            .toString();
+
+        MvcResult createResult = mockMvc.perform(post("/api/v1/water/wells")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "name":"Poco %s",
+                      "unitId":"%s",
+                      "communityName":"Vila %s",
+                      "latitude":-4.270,
+                      "longitude":15.284,
+                      "populationServed":800,
+                      "capacityM3PerDay":25.5
+                    }
+                    """.formatted(suffix, unitId, suffix)))
+            .andExpect(status().isCreated())
+            .andReturn();
+
+        String wellId = objectMapper.readTree(createResult.getResponse().getContentAsString()).path("id").asText();
+
+        mockMvc.perform(get("/api/v1/water/wells/{id}", wellId)
+                .header("Authorization", "Bearer " + token))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.name").value("Poco " + suffix))
+            .andExpect(jsonPath("$.unitId").value(unitId))
+            .andExpect(jsonPath("$.communityName").value("Vila " + suffix))
+            .andExpect(jsonPath("$.populationServed").value(800));
+    }
+
     private String loginAndGetToken() throws Exception {
         MvcResult loginResult = mockMvc.perform(post("/api/v1/auth/login")
                 .contentType(MediaType.APPLICATION_JSON)
