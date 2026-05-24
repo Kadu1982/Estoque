@@ -1,7 +1,9 @@
 package com.austral.estoque.integration;
 
 import com.austral.estoque.domain.organization.Warehouse;
+import com.austral.estoque.repository.organization.CostCenterRepository;
 import com.austral.estoque.repository.organization.OperationalUnitRepository;
+import com.austral.estoque.repository.organization.SectorRepository;
 import com.austral.estoque.repository.organization.WarehouseRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -37,6 +39,12 @@ class OperationalFlowIntegrationTest {
 
     @Autowired
     private OperationalUnitRepository operationalUnitRepository;
+
+    @Autowired
+    private SectorRepository sectorRepository;
+
+    @Autowired
+    private CostCenterRepository costCenterRepository;
 
     @Test
     void shouldCompleteCriticalOperationalFlow() throws Exception {
@@ -356,6 +364,49 @@ class OperationalFlowIntegrationTest {
 
         JsonNode stock = listStock(token);
         assertThat(quantityFor(stock, warehouseId, itemId)).isEqualByComparingTo("1.000");
+    }
+
+    @Test
+    void shouldCreateAndFetchAsset() throws Exception {
+        String token = loginAndGetToken();
+        String suffix = String.valueOf(System.currentTimeMillis()) + "AST";
+        String unitId = operationalUnitRepository.findFirstByDeletedAtIsNullAndActiveTrueOrderByCreatedAtAsc()
+            .orElseThrow()
+            .getId()
+            .toString();
+        String sectorId = sectorRepository.findFirstByDeletedAtIsNullAndActiveTrueOrderByCreatedAtAsc()
+            .orElseThrow()
+            .getId()
+            .toString();
+        String costCenterId = costCenterRepository.findFirstByDeletedAtIsNullAndActiveTrueOrderByCreatedAtAsc()
+            .orElseThrow()
+            .getId()
+            .toString();
+
+        MvcResult createResult = mockMvc.perform(post("/api/v1/assets")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "tag":"RESP-%s",
+                      "name":"Respirador %s",
+                      "type":"EQUIPAMENTO_SAUDE",
+                      "unitId":"%s",
+                      "sectorId":"%s",
+                      "mainCostCenterId":"%s"
+                    }
+                    """.formatted(suffix, suffix, unitId, sectorId, costCenterId)))
+            .andExpect(status().isCreated())
+            .andReturn();
+
+        String assetId = objectMapper.readTree(createResult.getResponse().getContentAsString()).path("id").asText();
+
+        mockMvc.perform(get("/api/v1/assets/{id}", assetId)
+                .header("Authorization", "Bearer " + token))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.tag").value("RESP-" + suffix))
+            .andExpect(jsonPath("$.type").value("EQUIPAMENTO_SAUDE"))
+            .andExpect(jsonPath("$.unitId").value(unitId));
     }
 
     private String loginAndGetToken() throws Exception {
