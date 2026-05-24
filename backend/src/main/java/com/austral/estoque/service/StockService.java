@@ -14,12 +14,21 @@ import java.util.List;
 public class StockService {
 
     private final StockBalanceRepository stockBalanceRepository;
+    private final StockAlertService stockAlertService;
+    private final StockStatusCalculator stockStatusCalculator;
 
     public List<StockBalanceResponse> list(Boolean lowStock) {
         var data = Boolean.TRUE.equals(lowStock)
             ? stockBalanceRepository.findBelowMinimum()
             : stockBalanceRepository.findAll();
-        return data.stream().map(sb -> new StockBalanceResponse(
+        return data.stream().map(this::toResponse).toList();
+    }
+
+    private StockBalanceResponse toResponse(com.austral.estoque.domain.stock.StockBalance sb) {
+        var plannedQuantity = stockAlertService.plannedQuantityFor(sb);
+        var percentage = stockStatusCalculator.percentageOfPlanned(sb.getQuantity(), plannedQuantity);
+        var statusColor = stockStatusCalculator.statusFor(percentage);
+        return new StockBalanceResponse(
             sb.getId(),
             sb.getItem().getId(),
             sb.getItem().getCode(),
@@ -29,7 +38,10 @@ public class StockService {
             sb.getQuantity(),
             sb.getItem().getMinStock(),
             sb.getItem().getMaxStock(),
-            sb.getItem().getUnitOfMeasure()
-        )).toList();
+            sb.getItem().getUnitOfMeasure(),
+            plannedQuantity,
+            percentage,
+            statusColor.name()
+        );
     }
 }

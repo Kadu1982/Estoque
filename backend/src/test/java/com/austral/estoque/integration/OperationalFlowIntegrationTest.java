@@ -233,6 +233,54 @@ class OperationalFlowIntegrationTest {
             .andExpect(jsonPath("$.detail").value("Order item does not belong to this order"));
     }
 
+    @Test
+    void shouldCreateRedStockAlertWhenReceivedQuantityIsAtOrBelowThirtyPercentOfPlannedQuantity() throws Exception {
+        String token = loginAndGetToken();
+        String userId = loginAndGetUserId();
+        String suffix = String.valueOf(System.currentTimeMillis()) + "LOW";
+
+        String supplierId = createSupplier(token, suffix);
+        String itemId = createItem(token, suffix);
+        String requisitionId = createRequisition(token, suffix);
+        approveRequisition(token, requisitionId);
+
+        JsonNode order = createOrder(token, suffix, supplierId, userId, requisitionId, itemId);
+        String orderId = order.path("id").asText();
+        String orderItemId = order.path("items").get(0).path("id").asText();
+        String warehouseId = firstWarehouseId(token);
+
+        mockMvc.perform(post("/api/v1/orders/{id}/receive", orderId)
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "warehouseId":"%s",
+                      "receiverId":"%s",
+                      "items":[
+                        {"orderItemId":"%s","quantity":2}
+                      ]
+                    }
+                    """.formatted(warehouseId, userId, orderItemId)))
+            .andExpect(status().isOk());
+
+        MvcResult alertsResult = mockMvc.perform(get("/api/v1/stock-alerts")
+                .header("Authorization", "Bearer " + token))
+            .andExpect(status().isOk())
+            .andReturn();
+
+        JsonNode alerts = objectMapper.readTree(alertsResult.getResponse().getContentAsString());
+        boolean hasRedAlertForItem = false;
+        for (JsonNode alert : alerts) {
+            if (itemId.equals(alert.path("itemId").asText())
+                && warehouseId.equals(alert.path("warehouseId").asText())
+                && "RED".equals(alert.path("statusColor").asText())) {
+                hasRedAlertForItem = true;
+                break;
+            }
+        }
+        assertThat(hasRedAlertForItem).isTrue();
+    }
+
     private String loginAndGetToken() throws Exception {
         MvcResult loginResult = mockMvc.perform(post("/api/v1/auth/login")
                 .contentType(MediaType.APPLICATION_JSON)

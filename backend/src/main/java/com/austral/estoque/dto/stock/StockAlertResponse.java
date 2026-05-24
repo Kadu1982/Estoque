@@ -1,21 +1,22 @@
 package com.austral.estoque.dto.stock;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.UUID;
 
-public record StockBalanceResponse(
+public record StockAlertResponse(
     UUID id,
+    UUID warehouseId,
+    String warehouseName,
     UUID itemId,
     String itemCode,
     String itemDescription,
-    UUID warehouseId,
-    String warehouseName,
-    BigDecimal quantity,
-    BigDecimal minStock,
-    BigDecimal maxStock,
-    String unitOfMeasure,
+    BigDecimal quantityOnHand,
     BigDecimal plannedQuantity,
     BigDecimal percentageOfPlanned,
-    String statusColor
+    String statusColor,
+    String alertType,
+    String alertStatus,
+    Instant createdAt
 ) {
 }

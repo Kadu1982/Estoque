@@ -18,7 +18,17 @@ public class Warehouse extends BaseEntity {
     @Column(length = 50)
     private String code;
 
+    @Enumerated(EnumType.STRING)
+    @Builder.Default
+    @Column(nullable = false, length = 30)
+    private WarehouseType type = WarehouseType.DESCENTRALIZADO;
+
     private String description;
     @Builder.Default
     private boolean active = true;
+
+    public enum WarehouseType {
+        CENTRAL,
+        DESCENTRALIZADO
+    }
 }

@@ -21,6 +21,7 @@ import com.austral.estoque.repository.stock.StockBalanceRepository;
 import com.austral.estoque.repository.stock.StockMovementRepository;
 import com.austral.estoque.repository.supplier.SupplierRepository;
 import com.austral.estoque.repository.user.UserRepository;
+import com.austral.estoque.service.StockAlertService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -45,6 +46,7 @@ public class OrderService {
     private final WarehouseRepository warehouseRepository;
     private final StockBalanceRepository stockBalanceRepository;
     private final StockMovementRepository stockMovementRepository;
+    private final StockAlertService stockAlertService;
 
     public Optional<OrderResponse> findById(UUID id) {
         return orderRepository.findById(id).map(this::toResponse);
@@ -138,6 +140,7 @@ public class OrderService {
 
             balance.addStock(itemReceipt.quantity(), orderItem.getUnitPriceUsd());
             stockBalanceRepository.save(balance);
+            stockAlertService.evaluateBalance(balance);
 
             orderItem.setReceivedQuantity(orderItem.getReceivedQuantity().add(itemReceipt.quantity()));
             orderItemRepository.save(orderItem);

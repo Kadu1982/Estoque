@@ -9,6 +9,9 @@ export interface StockBalance {
   minStock: number;
   maxStock: number;
   unitOfMeasure: string;
+  plannedQuantity: number | null;
+  percentageOfPlanned: number | null;
+  statusColor: 'GREEN' | 'YELLOW' | 'RED';
 }
 
 export interface StockPage {
@@ -23,4 +26,20 @@ export interface StockFilters {
   lowStock?: boolean;
   page?: number;
   size?: number;
+}
+
+export interface StockAlert {
+  id: string;
+  warehouseId: string;
+  warehouseName: string;
+  itemId: string;
+  itemCode: string;
+  itemDescription: string;
+  quantityOnHand: number;
+  plannedQuantity: number;
+  percentageOfPlanned: number;
+  statusColor: 'GREEN' | 'YELLOW' | 'RED';
+  alertType: string;
+  alertStatus: string;
+  createdAt: string;
 }
