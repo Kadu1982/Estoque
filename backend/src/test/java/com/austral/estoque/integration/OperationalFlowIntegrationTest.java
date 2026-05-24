@@ -1,5 +1,8 @@
 package com.austral.estoque.integration;
 
+import com.austral.estoque.domain.organization.Warehouse;
+import com.austral.estoque.repository.organization.OperationalUnitRepository;
+import com.austral.estoque.repository.organization.WarehouseRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -28,6 +31,12 @@ class OperationalFlowIntegrationTest {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private WarehouseRepository warehouseRepository;
+
+    @Autowired
+    private OperationalUnitRepository operationalUnitRepository;
 
     @Test
     void shouldCompleteCriticalOperationalFlow() throws Exception {
@@ -281,6 +290,74 @@ class OperationalFlowIntegrationTest {
         assertThat(hasRedAlertForItem).isTrue();
     }
 
+    @Test
+    void shouldTransferStockBetweenWarehouses() throws Exception {
+        String token = loginAndGetToken();
+        String userId = loginAndGetUserId();
+        String suffix = String.valueOf(System.currentTimeMillis()) + "TRF";
+
+        String supplierId = createSupplier(token, suffix);
+        String itemId = createItem(token, suffix);
+        String requisitionId = createRequisition(token, suffix);
+        approveRequisition(token, requisitionId);
+
+        JsonNode order = createOrder(token, suffix, supplierId, userId, requisitionId, itemId);
+        String sourceWarehouseId = firstWarehouseId(token);
+        receiveFirstOrderItem(token, userId, order, sourceWarehouseId, "2");
+
+        String targetWarehouseId = createAdditionalWarehouse(suffix).getId().toString();
+
+        mockMvc.perform(post("/api/v1/stock-transfers")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "sourceWarehouseId":"%s",
+                      "targetWarehouseId":"%s",
+                      "items":[
+                        {"itemId":"%s","quantity":1}
+                      ]
+                    }
+                    """.formatted(sourceWarehouseId, targetWarehouseId, itemId)))
+            .andExpect(status().isCreated());
+
+        JsonNode stock = listStock(token);
+        assertThat(quantityFor(stock, sourceWarehouseId, itemId)).isEqualByComparingTo("1.000");
+        assertThat(quantityFor(stock, targetWarehouseId, itemId)).isEqualByComparingTo("1.000");
+    }
+
+    @Test
+    void shouldIssueStockConsumptionFromWarehouse() throws Exception {
+        String token = loginAndGetToken();
+        String userId = loginAndGetUserId();
+        String suffix = String.valueOf(System.currentTimeMillis()) + "ISS";
+
+        String supplierId = createSupplier(token, suffix);
+        String itemId = createItem(token, suffix);
+        String requisitionId = createRequisition(token, suffix);
+        approveRequisition(token, requisitionId);
+
+        JsonNode order = createOrder(token, suffix, supplierId, userId, requisitionId, itemId);
+        String warehouseId = firstWarehouseId(token);
+        receiveFirstOrderItem(token, userId, order, warehouseId, "2");
+
+        mockMvc.perform(post("/api/v1/issues")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "warehouseId":"%s",
+                      "items":[
+                        {"itemId":"%s","quantity":1}
+                      ]
+                    }
+                    """.formatted(warehouseId, itemId)))
+            .andExpect(status().isCreated());
+
+        JsonNode stock = listStock(token);
+        assertThat(quantityFor(stock, warehouseId, itemId)).isEqualByComparingTo("1.000");
+    }
+
     private String loginAndGetToken() throws Exception {
         MvcResult loginResult = mockMvc.perform(post("/api/v1/auth/login")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -397,5 +474,53 @@ class OperationalFlowIntegrationTest {
             .andReturn();
         JsonNode warehouses = objectMapper.readTree(result.getResponse().getContentAsString());
         return warehouses.get(0).path("id").asText();
+    }
+
+    private Warehouse createAdditionalWarehouse(String suffix) {
+        var unit = operationalUnitRepository.findFirstByDeletedAtIsNullAndActiveTrueOrderByCreatedAtAsc()
+            .orElseThrow();
+        return warehouseRepository.save(Warehouse.builder()
+            .unit(unit)
+            .name("Warehouse " + suffix)
+            .code("WH-" + suffix)
+            .type(Warehouse.WarehouseType.DESCENTRALIZADO)
+            .active(true)
+            .build());
+    }
+
+    private void receiveFirstOrderItem(String token, String userId, JsonNode order, String warehouseId, String quantity) throws Exception {
+        String orderId = order.path("id").asText();
+        String orderItemId = order.path("items").get(0).path("id").asText();
+
+        mockMvc.perform(post("/api/v1/orders/{id}/receive", orderId)
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "warehouseId":"%s",
+                      "receiverId":"%s",
+                      "items":[
+                        {"orderItemId":"%s","quantity":%s}
+                      ]
+                    }
+                    """.formatted(warehouseId, userId, orderItemId, quantity)))
+            .andExpect(status().isOk());
+    }
+
+    private JsonNode listStock(String token) throws Exception {
+        MvcResult stockResult = mockMvc.perform(get("/api/v1/stock")
+                .header("Authorization", "Bearer " + token))
+            .andExpect(status().isOk())
+            .andReturn();
+        return objectMapper.readTree(stockResult.getResponse().getContentAsString());
+    }
+
+    private java.math.BigDecimal quantityFor(JsonNode stock, String warehouseId, String itemId) {
+        for (JsonNode node : stock) {
+            if (warehouseId.equals(node.path("warehouseId").asText()) && itemId.equals(node.path("itemId").asText())) {
+                return node.path("quantity").decimalValue();
+            }
+        }
+        return java.math.BigDecimal.ZERO;
     }
 }
