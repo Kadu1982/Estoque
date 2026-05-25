@@ -446,6 +446,48 @@ class OperationalFlowIntegrationTest {
             .andExpect(jsonPath("$.populationServed").value(800));
     }
 
+    @Test
+    void shouldCreateWaterSamplingPointAndSample() throws Exception {
+        String token = loginAndGetToken();
+        String suffix = String.valueOf(System.currentTimeMillis()) + "SMP";
+        String unitId = operationalUnitRepository.findFirstByDeletedAtIsNullAndActiveTrueOrderByCreatedAtAsc()
+            .orElseThrow()
+            .getId()
+            .toString();
+        String wellId = createWaterWell(token, suffix, unitId);
+
+        MvcResult pointResult = mockMvc.perform(post("/api/v1/water/sampling-points")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "wellId":"%s",
+                      "name":"Ponto coleta %s",
+                      "parameters":"pH,turbidez,coliformes",
+                      "frequencyDays":30
+                    }
+                    """.formatted(wellId, suffix)))
+            .andExpect(status().isCreated())
+            .andReturn();
+
+        String samplingPointId = objectMapper.readTree(pointResult.getResponse().getContentAsString()).path("id").asText();
+
+        mockMvc.perform(post("/api/v1/water/samples")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "samplingPointId":"%s",
+                      "sampleCode":"SAMPLE-%s",
+                      "classification":"CONFORME",
+                      "notes":"Coleta de rotina"
+                    }
+                    """.formatted(samplingPointId, suffix)))
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.sampleCode").value("SAMPLE-" + suffix))
+            .andExpect(jsonPath("$.classification").value("CONFORME"));
+    }
+
     private String loginAndGetToken() throws Exception {
         MvcResult loginResult = mockMvc.perform(post("/api/v1/auth/login")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -610,5 +652,25 @@ class OperationalFlowIntegrationTest {
             }
         }
         return java.math.BigDecimal.ZERO;
+    }
+
+    private String createWaterWell(String token, String suffix, String unitId) throws Exception {
+        MvcResult createResult = mockMvc.perform(post("/api/v1/water/wells")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "name":"Poco %s",
+                      "unitId":"%s",
+                      "communityName":"Vila %s",
+                      "latitude":-4.270,
+                      "longitude":15.284,
+                      "populationServed":800,
+                      "capacityM3PerDay":25.5
+                    }
+                    """.formatted(suffix, unitId, suffix)))
+            .andExpect(status().isCreated())
+            .andReturn();
+        return objectMapper.readTree(createResult.getResponse().getContentAsString()).path("id").asText();
     }
 }
